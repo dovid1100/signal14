@@ -1,3 +1,4 @@
+
 export const config = { runtime: "edge" };
 
 const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
@@ -129,9 +130,17 @@ For EACH ticker above, search the web to find if there is a HARD CATALYST publis
 - Short squeeze setup — confirmed high short interest >20% with positive catalyst
 - Uplisting to NYSE or NASDAQ
 
+SEARCH THESE SOURCES SPECIFICALLY for each ticker:
+- Motley Fool (fool.com) — earnings analysis, stock news, analyst coverage
+- Seeking Alpha (seekingalpha.com) — breaking news, earnings, upgrades, catalyst alerts
+- MarketWatch (marketwatch.com) — breaking news, FDA decisions, M&A, contract wins
+- Benzinga (benzinga.com) — free breaking news, pre-market movers, analyst upgrades
+- SEC EDGAR (sec.gov) — 8-K filings, material events
+- Reuters (reuters.com) and Bloomberg (bloomberg.com) — major catalyst confirmation
+
 STRICT RULES:
-1. Only include a ticker if you find a REAL, SPECIFIC news article or SEC filing published in the last 24 hours
-2. Every alert MUST have a real source URL — no placeholder URLs
+1. Only include a ticker if you find a REAL, SPECIFIC news article or SEC filing from one of the above sources published in the last 24 hours
+2. Every alert MUST have a real source URL from one of the above sources — no placeholder URLs
 3. If you cannot find a hard catalyst for a ticker, DO NOT include it
 4. estimatedUpside must be your honest assessment — do not inflate
 5. confidence max 70 for stocks under $5
@@ -245,7 +254,9 @@ export default async function handler(req) {
     // asking Claude to find movers itself via web search
     const prompt = movers.length > 0
       ? buildConfirmationPrompt(movers)
-      : `You are an elite stock market analyst. Search the web RIGHT NOW for US stocks showing unusual movement today — price up 3%+ or volume 3x+ average — then confirm which ones have a hard catalyst (FDA approval, earnings beat, M&A, major contract, short squeeze, 8-K filing). Only return alerts with a real source URL and genuine 5%+ continuation potential today.
+      : `You are an elite stock market analyst. Search the web RIGHT NOW for US stocks showing unusual movement today — price up 3%+ or volume 3x+ average — then confirm which ones have a hard catalyst (FDA approval, earnings beat, M&A, major contract, short squeeze, 8-K filing).
+
+Search these sources specifically: Motley Fool (fool.com), Seeking Alpha (seekingalpha.com), MarketWatch (marketwatch.com), Benzinga (benzinga.com), SEC EDGAR (sec.gov), Reuters (reuters.com). Only return alerts with a real source URL from one of these sources and genuine 5%+ continuation potential today.
 
 Return ONLY raw JSON:
 {"alerts":[{"ticker":"","company":"","headline":"","estimatedUpside":0,"catalystType":"Earnings Beat","urgency":"High","timeframe":"hours","summary":"","reasoning":"","confidence":0,"source":"https://","sourceName":"","newsTime":"","priceAtAlert":0,"volumeRatio":0,"currentChange":0}],"storiesAnalyzed":0}
