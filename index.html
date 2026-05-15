@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="theme-color" content="#040407"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="MP V2"/>
+<title>Market Prediction V2</title>
+
+<!-- PWA Manifest (inline) -->
+<script>
+const manifest = {
+  name: "Market Prediction V2",
+  short_name: "MP V2",
+  description: "AI-powered stock market signal intelligence",
+  start_url: "/",
+  display: "standalone",
+  background_color: "#040407",
+  theme_color: "#040407",
+  orientation: "portrait",
+  icons: [{ src: "/icon-192.png", sizes: "192x192", type: "image/png" }]
+};
+const blob = new Blob([JSON.stringify(manifest)], { type: "application/json" });
+const url = URL.createObjectURL(blob);
+const link = document.createElement("link");
+link.rel = "manifest"; link.href = url;
+document.head.appendChild(link);
+</script>
+
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=Bebas+Neue&display=swap" rel="stylesheet"/>
+
+<style>
+/* ── RESET & BASE ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  background: #040407;
+  color: #e2e8f0;
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+  overscroll-behavior: none;
+}
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 2px; }
+a { color: inherit; text-decoration: none; }
+
+/* ── LAYOUT ───────────────────────────────────────────────────────────────── */
+#app { display: flex; flex-direction: column; min-height: 100vh; }
+.page { display: none; flex: 1; }
+.page.on { display: block; }
+main { max-width: 1100px; margin: 0 auto; padding: 14px 16px 32px; }
+
+/* ── HEADER ───────────────────────────────────────────────────────────────── */
+header {
+  background: #040407;
+  border-bottom: 1px solid #0d1829;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  padding: 0 16px;
+}
+.hdr {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 52px;
+}
+.logo { display: flex; align-items: center; gap: 10px; }
+.dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #00ff88; box-shadow: 0 0 10px #00ff88;
+  flex-shrink: 0;
+}
+.dot.on {
+  background: #f59e0b; box-shadow: 0 0 10px #f59e0b;
+  animation: blink 1s step-end infinite;
+}
+.logo-text {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 20px; letter-spacing: .18em; color: #fff;
+}
+.logo-sub { font-size: 7px; color: #1a3a5c; letter-spacing: .12em; }
+.hdr-right { display: flex; align-items: center; gap: 12px; }
+
+/* Timer */
+.timer-wrap { display: flex; flex-direction: column; gap: 3px; }
+.timer-top { display: flex; justify-content: space-between; font-size: 7px; letter-spacing: .1em; gap: 8px; }
+.timer-top .tlbl { color: #1a3a5c; }
+.timer-top .tval { color: #475569; }
+.timer-track { height: 2px; background: #0d1829; border-radius: 1px; overflow: hidden; width: 80px; }
+.timer-fill {
+  height: 100%; border-radius: 1px;
+  background: linear-gradient(90deg, #00ff88, #00d4ff);
+  box-shadow: 0 0 6px rgba(0,255,136,.4);
+  transition: width 1s linear;
+}
+
+/* Scan button */
+.scan-btn {
+  background: rgba(0,255,136,.07);
+  border: 1px solid rgba(0,255,136,.3);
+  color: #00ff88;
+  padding: 5px 12px;
+  font-family: inherit; font-size: 9px; letter-spacing: .12em; text-transform: uppercase;
+  cursor: pointer; border-radius: 2px; transition: all .15s;
+}
+.scan-btn:hover { background: rgba(0,255,136,.13); }
+.scan-btn:disabled { color: #334155; border-color: #0d1829; cursor: not-allowed; }
+
+/* Bell */
+.bell { position: relative; cursor: pointer; font-size: 15px; user-select: none; }
+.bell-badge {
+  position: absolute; top: -5px; right: -5px;
+  background: #ff2d55; color: #fff; border-radius: 50%;
+  width: 14px; height: 14px; font-size: 7px; font-weight: 700;
+  display: none; align-items: center; justify-content: center;
+  border: 1px solid #040407;
+}
+
+/* ── NAV TABS ─────────────────────────────────────────────────────────────── */
+.nav-tabs {
+  max-width: 1100px; margin: 0 auto;
+  display: flex; border-bottom: 1px solid #0d1829; padding: 0 16px;
+}
+.ntab {
+  background: transparent; border: none;
+  border-bottom: 2px solid transparent;
+  color: #334155; padding: 10px 14px;
+  font-family: inherit; font-size: 9px; letter-spacing: .15em; text-transform: uppercase;
+  cursor: pointer; transition: all .15s; margin-bottom: -1px;
+}
+.ntab:hover { color: #94a3b8; }
+.ntab.on { color: #00ff88; border-bottom-color: #00ff88; }
+.ntab-badge {
+  display: inline-block; background: #00ff88; color: #000;
+  border-radius: 2px; padding: 0 4px; font-size: 7px; font-weight: 700;
+  margin-left: 4px; vertical-align: middle;
+}
+.ntab-badge.pend { background: #f59e0b; }
+
+/* ── STATUS BAR ───────────────────────────────────────────────────────────── */
+.stats { display: flex; gap: 4px; margin-bottom: 12px; }
+.stat { flex: 1; background: #05080d; border: 1px solid #0d1829; padding: 11px 12px; }
+.stat-lbl { font-size: 7px; color: #1a3a5c; letter-spacing: .13em; margin-bottom: 4px; }
+.stat-val { font-family: 'Bebas Neue', sans-serif; font-size: 26px; line-height: 1; }
+
+.status-bar {
+  background: #05080d; border: 1px solid #0d1829;
+  padding: 5px 11px; margin-bottom: 11px;
+  display: none; gap: 8px; font-size: 7px; color: #1a3a5c;
+  letter-spacing: .08em; flex-wrap: wrap; align-items: center;
+}
+
+/* ── FILTERS ──────────────────────────────────────────────────────────────── */
+.filters { display: flex; gap: 4px; margin-bottom: 11px; flex-wrap: wrap; align-items: center; }
+.fbtn {
+  background: transparent; border: 1px solid #1a2535; color: #475569;
+  padding: 5px 11px; font-family: inherit; font-size: 9px;
+  letter-spacing: .1em; text-transform: uppercase; cursor: pointer;
+  transition: all .15s; border-radius: 2px;
+}
+.fbtn:hover { border-color: #2d3f55; color: #94a3b8; }
+.fbtn.on { border-color: #00ff88; color: #00ff88; background: rgba(0,255,136,.05); }
+.fcount { margin-left: auto; font-size: 7px; color: #1a2535; letter-spacing: .1em; }
+
+/* ── ALERT CARDS ──────────────────────────────────────────────────────────── */
+.feed { display: flex; flex-direction: column; gap: 3px; }
+.acard {
+  border: 1px solid #0d1829; border-left: 3px solid #1a3a5c;
+  background: #05080d; cursor: pointer;
+  transition: border-color .2s, transform .15s;
+  border-radius: 2px;
+}
+.acard:hover { border-color: #1e3a55; transform: translateX(2px); }
+.acard.critical-pulse { animation: ring 2.5s ease infinite; }
+.acard.slide-in { animation: slidein .3s ease; }
+
+.card-main { padding: 11px 13px; }
+.card-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+
+.ticker-box {
+  background: rgba(255,255,255,.02); border: 1px solid #0d1829;
+  padding: 6px 8px; min-width: 58px; text-align: center; flex-shrink: 0;
+  border-radius: 2px;
+}
+.ticker-sym { font-size: 14px; font-weight: 700; color: #fff; line-height: 1; }
+.ticker-co { font-size: 6px; color: #1a3a5c; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ticker-price { font-size: 7px; color: #334155; margin-top: 2px; }
+
+.card-mid { flex: 1; min-width: 0; }
+.badge-row { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; margin-bottom: 5px; }
+.badge-new { background: #00ff88; color: #000; font-size: 6px; font-weight: 800; padding: 1px 5px; }
+.badge-urg, .badge-cat, .badge-time { font-size: 6px; padding: 1px 5px; border: 1px solid; border-radius: 1px; }
+.card-headline { font-size: 12px; color: #cbd5e1; line-height: 1.4; font-weight: 500; margin-bottom: 5px; }
+.card-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.meta-chip { font-size: 7px; color: #475569; }
+.acc-badge { font-size: 7px; font-weight: 700; }
+
+.upside-box { text-align: right; flex-shrink: 0; }
+.upside-num { font-family: 'Bebas Neue', sans-serif; font-size: 24px; color: #00ff88; line-height: 1; }
+.upside-lbl { font-size: 6px; color: #1a3a5c; margin-top: 2px; }
+
+.conf-row { display: flex; align-items: center; gap: 7px; }
+.conf-track { flex: 1; height: 2px; background: #0d1829; border-radius: 1px; overflow: hidden; }
+.conf-fill { height: 100%; border-radius: 1px; transition: width .5s; }
+.conf-lbl { font-size: 7px; color: #1a3a5c; flex-shrink: 0; }
+.card-arrow { font-size: 7px; color: #1a2535; flex-shrink: 0; }
+
+/* Detail expand */
+.card-detail {
+  border-top: 1px solid #0d1829;
+  padding: 11px 13px; background: rgba(0,0,0,.25);
+  display: none;
+}
+.card-detail.open { display: block; }
+.detail-section { margin-bottom: 10px; }
+.detail-lbl { font-size: 7px; color: #1a3a5c; letter-spacing: .13em; margin-bottom: 4px; }
+.detail-txt { font-size: 11px; color: #94a3b8; line-height: 1.75; }
+.detail-reason { border-left: 2px solid; padding-left: 10px; margin-bottom: 10px; }
+.detail-reason .detail-txt { color: #cbd5e1; }
+.detail-meta { display: flex; gap: 10px; font-size: 7px; color: #1a2535; flex-wrap: wrap; margin-bottom: 8px; }
+.detail-meta b { color: #334155; }
+.source-block { margin-top: 8px; padding-top: 8px; border-top: 1px solid #0d1829; }
+.source-lbl { font-size: 7px; color: #1a3a5c; letter-spacing: .13em; margin-bottom: 4px; }
+.source-name { font-size: 10px; color: #475569; margin-bottom: 3px; }
+.source-link { font-size: 10px; color: #00d4ff; word-break: break-all; display: block; }
+.source-link:hover { text-decoration: underline; }
+
+/* Empty states */
+.empty-state { background: #05080d; border: 1px solid #0d1829; padding: 48px; text-align: center; }
+.empty-icon { font-size: 34px; margin-bottom: 12px; opacity: .5; }
+.empty-icon.pulse { animation: glow 2s ease infinite; }
+.empty-title { font-size: 9px; color: #1a3a5c; letter-spacing: .22em; margin-bottom: 6px; }
+.scanning-text { animation: glow 2s ease infinite; }
+.empty-sub { font-size: 7px; color: #0f1923; }
+
+/* ── LOG ──────────────────────────────────────────────────────────────────── */
+.log-section { margin-top: 16px; border-top: 1px solid #0d1829; padding-top: 12px; }
+.log-title { font-size: 7px; color: #0f1923; letter-spacing: .18em; margin-bottom: 6px; }
+.log-row { display: flex; gap: 8px; font-size: 7.5px; padding: 3px 0; border-bottom: 1px solid rgba(13,24,41,.8); }
+.lt { color: #1a2535; flex-shrink: 0; min-width: 72px; }
+.ls { color: #0f1923; }
+.lm { word-break: break-all; line-height: 1.5; }
+.lm.info { color: #f59e0b; }
+.lm.found { color: #00ff88; }
+.lm.clear { color: #334155; }
+.lm.error { color: #ff2d55; }
+
+/* ── TRACKER ──────────────────────────────────────────────────────────────── */
+.trk-header {
+  display: flex; align-items: flex-start;
+  justify-content: space-between; margin-bottom: 14px; gap: 12px; flex-wrap: wrap;
+}
+.trk-title { font-family: 'Bebas Neue', sans-serif; font-size: 24px; letter-spacing: .15em; color: #fff; }
+.trk-sub { font-size: 7px; color: #1a3a5c; letter-spacing: .12em; margin-top: 2px; }
+.trk-clear-btn {
+  background: transparent; border: 1px solid #1a2535; color: #334155;
+  padding: 5px 11px; font-family: inherit; font-size: 8px;
+  letter-spacing: .1em; cursor: pointer; transition: all .15s; border-radius: 2px;
+}
+.trk-clear-btn:hover { border-color: #ff2d55; color: #ff2d55; }
+
+.acc-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 4px; margin-bottom: 12px; }
+.acc-card { background: #05080d; border: 1px solid #0d1829; padding: 12px; }
+.acc-card-lbl { font-size: 7px; color: #1a3a5c; letter-spacing: .13em; margin-bottom: 5px; }
+.acc-card-val { font-family: 'Bebas Neue', sans-serif; font-size: 28px; line-height: 1; }
+.acc-card-sub { font-size: 7px; color: #334155; margin-top: 3px; }
+
+.breakdown-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+.breakdown-box { background: #05080d; border: 1px solid #0d1829; padding: 11px; }
+.breakdown-lbl { font-size: 7px; color: #1a3a5c; letter-spacing: .13em; margin-bottom: 9px; }
+.bk-row { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
+.bk-name { font-size: 8px; color: #475569; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bk-bar-wrap { width: 80px; height: 3px; background: #0d1829; border-radius: 2px; overflow: hidden; flex-shrink: 0; }
+.bk-bar-fill { height: 100%; border-radius: 2px; transition: width .5s; }
+.bk-pct { font-size: 9px; flex-shrink: 0; min-width: 30px; text-align: right; }
+.bk-n { font-size: 7px; color: #334155; flex-shrink: 0; }
+
+.pred-filters { display: flex; gap: 4px; margin-bottom: 9px; }
+.pfbtn {
+  background: transparent; border: 1px solid #1a2535; color: #475569;
+  padding: 4px 10px; font-family: inherit; font-size: 8px;
+  letter-spacing: .08em; cursor: pointer; transition: all .15s; border-radius: 2px;
+}
+.pfbtn.on { border-color: #00ff88; color: #00ff88; background: rgba(0,255,136,.05); }
+
+.pred-section-lbl {
+  font-size: 7px; color: #1a3a5c; letter-spacing: .18em;
+  margin-bottom: 7px; display: flex; align-items: center; justify-content: space-between;
+}
+
+.pred-card {
+  border: 1px solid #0d1829; border-left: 3px solid #1a3a5c;
+  background: #05080d; margin-bottom: 4px; border-radius: 2px;
+}
+.pred-card.outcome-hit { border-left-color: #00ff88; }
+.pred-card.outcome-miss { border-left-color: #ff2d55; }
+.pred-card.outcome-pending { border-left-color: #f59e0b; }
+.pred-card.outcome-checking { border-left-color: #00d4ff; }
+.pred-body { padding: 10px 12px; }
+.pred-top { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 7px; }
+.pred-ticker { font-size: 13px; font-weight: 700; color: #fff; min-width: 50px; }
+.pred-info { flex: 1; min-width: 0; }
+.pred-headline { font-size: 10px; color: #94a3b8; line-height: 1.4; margin-bottom: 4px; }
+.pred-meta { display: flex; gap: 8px; flex-wrap: wrap; }
+.pmeta { font-size: 7px; color: #334155; }
+.pred-outcome-box { text-align: right; flex-shrink: 0; min-width: 68px; }
+.outcome-badge {
+  font-size: 8px; padding: 3px 7px; border: 1px solid;
+  border-radius: 1px; font-weight: 700; letter-spacing: .07em; white-space: nowrap;
+}
+.outcome-badge.hit { color: #00ff88; border-color: #00ff8840; background: rgba(0,255,136,.07); }
+.outcome-badge.miss { color: #ff2d55; border-color: #ff2d5540; background: rgba(255,45,85,.07); }
+.outcome-badge.pending { color: #f59e0b; border-color: #f59e0b40; background: rgba(245,158,11,.07); }
+.outcome-badge.checking { color: #00d4ff; border-color: #00d4ff40; background: rgba(0,212,255,.07); animation: glow 1.5s ease infinite; }
+
+.pred-numbers { display: flex; gap: 10px; align-items: center; padding-top: 7px; border-top: 1px solid #0d1829; flex-wrap: wrap; }
+.pred-num { display: flex; flex-direction: column; gap: 2px; }
+.pred-num-lbl { font-size: 6px; color: #1a3a5c; letter-spacing: .12em; }
+.pred-num-val { font-size: 11px; font-weight: 700; }
+.pred-num-val.pos { color: #00ff88; }
+.pred-num-val.neg { color: #ff2d55; }
+.pred-num-val.neutral { color: #475569; }
+.check-btn {
+  margin-left: auto; background: transparent; border: 1px solid #1a2535;
+  color: #475569; padding: 4px 10px; font-family: inherit;
+  font-size: 7px; letter-spacing: .1em; cursor: pointer; transition: all .15s; border-radius: 2px;
+}
+.check-btn:hover { border-color: #00d4ff; color: #00d4ff; }
+.check-btn:disabled { color: #0f1923; border-color: #0d1829; cursor: not-allowed; }
+
+.pred-progress { margin-top: 7px; display: flex; flex-direction: column; gap: 4px; }
+.prog-row { display: flex; align-items: center; gap: 6px; }
+.prog-lbl { font-size: 6px; color: #1a3a5c; min-width: 52px; }
+.prog-track { flex: 1; height: 2px; background: #0d1829; border-radius: 1px; overflow: hidden; }
+.prog-fill { height: 100%; border-radius: 1px; transition: width .5s; }
+.prog-val { font-size: 7px; color: #334155; min-width: 36px; }
+
+.pred-source-link { display: block; margin-top: 6px; font-size: 9px; color: #00d4ff; }
+.pred-source-link:hover { text-decoration: underline; }
+
+.trk-empty { background: #05080d; border: 1px solid #0d1829; padding: 48px; text-align: center; }
+.trk-empty-icon { font-size: 32px; margin-bottom: 10px; opacity: .4; }
+.trk-empty-title { font-size: 9px; color: #1a3a5c; letter-spacing: .22em; margin-bottom: 5px; }
+.trk-empty-sub { font-size: 7px; color: #0f1923; }
+
+/* ── FOOTER ───────────────────────────────────────────────────────────────── */
+.footer { margin-top: 18px; text-align: center; font-size: 7px; color: #0a1220; letter-spacing: .13em; }
+
+/* ── ANIMATIONS ───────────────────────────────────────────────────────────── */
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+@keyframes glow { 0%,100%{opacity:.35} 50%{opacity:1} }
+@keyframes ring { 0%{box-shadow:0 0 0 0 rgba(255,45,85,.4)} 70%{box-shadow:0 0 0 8px transparent} 100%{box-shadow:0 0 0 0 transparent} }
+@keyframes slidein { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+
+/* ── RESPONSIVE ───────────────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .acc-grid { grid-template-columns: repeat(2,1fr); }
+  .breakdown-row { grid-template-columns: 1fr; }
+  .logo-sub { display: none; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HEADER -->
+  <header>
+    <div class="hdr">
+      <div class="logo">
+        <div class="dot" id="dot"></div>
+        <div>
+          <div class="logo-text">MARKET PREDICTION V2</div>
+          <div class="logo-sub">AI SIGNAL INTELLIGENCE · TWO-PASS VERIFIED</div>
+        </div>
+      </div>
+      <div class="hdr-right">
+        <div class="timer-wrap">
+          <div class="timer-top">
+            <span class="tlbl">NEXT SCAN</span>
+            <span class="tval" id="timer-txt">5:00</span>
+          </div>
+          <div class="timer-track">
+            <div class="timer-fill" id="timer-fill" style="width:0%"></div>
+          </div>
+        </div>
+        <button class="scan-btn" id="scan-btn">SCAN NOW</button>
+        <div class="bell" id="bell">
+          🔔
+          <div class="bell-badge" id="bell-badge"></div>
+        </div>
+      </div>
+    </div>
+    <div class="nav-tabs">
+      <button class="ntab on" id="tab-signals" onclick="switchTab('signals')">
+        SIGNALS
+        <span class="ntab-badge" id="tab-signals-badge" style="display:none">0</span>
+      </button>
+      <button class="ntab" id="tab-tracker" onclick="switchTab('tracker')">
+        TRACKER
+        <span class="ntab-badge pend" id="tab-tracker-badge" style="display:none">0</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- SIGNALS PAGE -->
+  <div id="page-signals" class="page on">
+    <main>
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-lbl">TOTAL SIGNALS</div>
+          <div class="stat-val" id="s-total" style="color:#cbd5e1">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-lbl">CRITICAL</div>
+          <div class="stat-val" id="s-crit" style="color:#ff2d55">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-lbl">HIGH URGENCY</div>
+          <div class="stat-val" id="s-high" style="color:#ff9500">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-lbl">10%+ UPSIDE</div>
+          <div class="stat-val" id="s-10p" style="color:#00ff88">0</div>
+        </div>
+      </div>
+
+      <div class="status-bar" id="status-bar">
+        <span>LAST SCAN</span>
+        <span id="sb-time" style="color:#334155"></span>
+        <span>·</span>
+        <span id="sb-analyzed" style="color:#334155"></span>
+        <span>·</span>
+        <span id="sb-found"></span>
+      </div>
+
+      <div class="filters">
+        <button class="fbtn on" id="f-all">All Signals</button>
+        <button class="fbtn" id="f-crit">Critical Only</button>
+        <button class="fbtn" id="f-high">High+ Urgency</button>
+        <button class="fbtn" id="f-10p">10%+ Upside</button>
+        <span class="fcount" id="fcount">0 RESULTS</span>
+      </div>
+
+      <div class="feed" id="feed">
+        <div class="empty-state">
+          <div class="empty-icon">📡</div>
+          <div class="empty-title">AWAITING SIGNALS</div>
+          <div class="empty-sub">Two-pass verification · Movers confirmed before firing</div>
+        </div>
+      </div>
+
+      <div class="log-section" id="log-section" style="display:none">
+        <div class="log-title">DIAGNOSTIC LOG</div>
+        <div id="log-rows"></div>
+      </div>
+
+      <div class="footer">MARKET PREDICTION V2 · FOR INFORMATIONAL PURPOSES ONLY · NOT FINANCIAL ADVICE</div>
+    </main>
+  </div>
+
+  <!-- TRACKER PAGE -->
+  <div id="page-tracker" class="page">
+    <main>
+      <div class="trk-header">
+        <div>
+          <div class="trk-title">PREDICTION TRACKER</div>
+          <div class="trk-sub">LIVE ACCURACY · AUTO-LOGGED · OUTCOME VERIFIED</div>
+        </div>
+        <button class="trk-clear-btn" onclick="clearAllPredictions()">CLEAR ALL</button>
+      </div>
+
+      <div class="acc-grid">
+        <div class="acc-card">
+          <div class="acc-card-lbl">OVERALL ACCURACY</div>
+          <div class="acc-card-val" id="acc-overall" style="color:#cbd5e1">—</div>
+          <div class="acc-card-sub" id="acc-overall-sub">need 3+ outcomes</div>
+        </div>
+        <div class="acc-card">
+          <div class="acc-card-lbl">TOTAL LOGGED</div>
+          <div class="acc-card-val" id="acc-total" style="color:#cbd5e1">0</div>
+          <div class="acc-card-sub" id="acc-total-sub">signals tracked</div>
+        </div>
+        <div class="acc-card">
+          <div class="acc-card-lbl">AVG PREDICTED</div>
+          <div class="acc-card-val" id="acc-avg-pred" style="color:#00ff88">—</div>
+          <div class="acc-card-sub">upside estimate</div>
+        </div>
+        <div class="acc-card">
+          <div class="acc-card-lbl">AVG ACTUAL</div>
+          <div class="acc-card-val" id="acc-avg-actual" style="color:#cbd5e1">—</div>
+          <div class="acc-card-sub">on resolved signals</div>
+        </div>
+      </div>
+
+      <div class="breakdown-row">
+        <div class="breakdown-box">
+          <div class="breakdown-lbl">ACCURACY BY CATALYST TYPE</div>
+          <div id="bk-catalyst">
+            <div style="font-size:8px;color:#1a3a5c;padding:10px 0;text-align:center">No resolved signals yet</div>
+          </div>
+        </div>
+        <div class="breakdown-box">
+          <div class="breakdown-lbl">ACCURACY BY CONFIDENCE TIER</div>
+          <div id="bk-confidence">
+            <div style="font-size:8px;color:#1a3a5c;padding:10px 0;text-align:center">No resolved signals yet</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pred-filters">
+        <button class="pfbtn on" id="pf-all" onclick="setPredFilter('all')">ALL</button>
+        <button class="pfbtn" id="pf-pending" onclick="setPredFilter('pending')">PENDING ⏳</button>
+        <button class="pfbtn" id="pf-hit" onclick="setPredFilter('hit')">HITS ✅</button>
+        <button class="pfbtn" id="pf-miss" onclick="setPredFilter('miss')">MISSES ❌</button>
+      </div>
+
+      <div class="pred-section-lbl">
+        <span>LOGGED PREDICTIONS</span>
+        <span id="pred-count" style="color:#334155">0 TOTAL</span>
+      </div>
+      <div id="pred-list"></div>
+
+      <div class="footer" style="margin-top:24px">MARKET PREDICTION V2 · TRACKER · NOT FINANCIAL ADVICE</div>
+    </main>
+  </div>
+
+</div><!-- #app -->
+
+<script src="/app.js"></script>
+</body>
+</html>
