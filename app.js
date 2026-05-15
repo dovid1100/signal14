@@ -4,9 +4,63 @@
    ============================================================ */
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
-const BACKEND_URL = "/api/scan";
+const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const SCAN_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const CHECK_OUTCOME_AFTER_MS = 60 * 60 * 1000; // 1 hour min before checking outcome
+
+// ─── API KEY ──────────────────────────────────────────────────────────────────
+function getApiKey() { return localStorage.getItem("mpv2_api_key") || ""; }
+function saveApiKey(k) { localStorage.setItem("mpv2_api_key", k.trim()); updateKeyStatus(); }
+function updateKeyStatus() {
+  const k = getApiKey();
+  const el = document.getElementById("key-status");
+  const inp = document.getElementById("api-key-input");
+  if (!el) return;
+  if (!k) { el.className = "key-status none"; el.textContent = "NO KEY SET"; if(inp) inp.value = ""; }
+  else if (k.startsWith("sk-ant-")) { el.className = "key-status ok"; el.textContent = "✓ KEY SAVED"; if(inp) inp.value = k.slice(0,12) + "••••••••" + k.slice(-4); }
+  else { el.className = "key-status bad"; el.textContent = "⚠ INVALID KEY"; }
+}
+
+// ─── MARKET HOURS ─────────────────────────────────────────────────────────────
+function isMarketHours() {
+  const et = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const day = et.getDay();
+  if (day === 0 || day === 6) return false;
+  const mins = et.getHours() * 60 + et.getMinutes();
+  return mins >= 9 * 60 && mins < 20 * 60;
+}
+
+// ─── SCAN PROMPT ──────────────────────────────────────────────────────────────
+const SCAN_PROMPT = `You are an elite stock market analyst. Search the web RIGHT NOW for US stocks showing unusual movement today — price up 3%+ or volume 3x+ average — then confirm which ones have a hard catalyst published in the last 24 hours.
+
+Search these sources specifically: Motley Fool (fool.com), Seeking Alpha (seekingalpha.com), MarketWatch (marketwatch.com), Benzinga (benzinga.com), SEC EDGAR 8-K filings (sec.gov), Reuters (reuters.com).
+
+Hard catalysts only:
+- FDA approval, drug trial result, IND approval, Fast Track designation
+- Earnings beat with EPS surprise >10%
+- Raised full-year guidance
+- M&A acquisition at a premium
+- Major contract or government win
+- Analyst upgrade with significant price target increase
+- SEC 8-K material event filing
+- Short squeeze — confirmed >20% short float with positive catalyst
+- Uplisting to NYSE or NASDAQ
+
+STRICT RULES:
+1. Only include a stock if you found a REAL article or filing from the above sources in the last 24 hours
+2. Every alert MUST have a real working source URL — no placeholders
+3. estimatedUpside must be honest — do not inflate
+4. confidence max 70 for stocks under $5
+5. Only fire if you genuinely believe 5%+ continuation is likely today
+6. EXCLUDE all cryptocurrency, crypto tokens, crypto ETFs
+
+Return ONLY raw JSON, no markdown, no explanation:
+{"alerts":[{"ticker":"AAPL","company":"Apple Inc","headline":"Max 10 word headline","estimatedUpside":8,"catalystType":"Earnings Beat","urgency":"High","timeframe":"hours","summary":"2-3 sentences explaining what happened.","reasoning":"Why this will continue 5%+ today.","confidence":80,"source":"https://real-url.com/article","sourceName":"Benzinga","newsTime":"Today at 9:45 AM ET","priceAtAlert":185.50,"volumeRatio":3.2,"currentChange":4.2}],"storiesAnalyzed":20}
+
+catalystType: Earnings Beat, M&A Deal, FDA Approval, Contract Win, Analyst Upgrade, Regulatory Win, Short Squeeze, Guidance Raise, Clinical Trial, Biotech Catalyst
+urgency: Critical, High, Medium
+timeframe: hours, days, weeks
+If nothing qualifies: {"alerts":[],"storiesAnalyzed":0}`;
 
 const CATALYST_COLORS = {
   "Earnings Beat": "#00ff88",
@@ -102,7 +156,7 @@ async function registerSW() {
       const cache = await caches.open("mpv2-v1");
       await cache.put(
         "/config",
-        new Response(JSON.stringify({ backendUrl: BACKEND_URL }), {
+        new Response(JSON.stringify({ backendUrl: "/api/scan" }), {
           headers: { "Content-Type": "application/json" },
         })
       );
@@ -162,46 +216,95 @@ function playAlertSound() {
 
 // ─── SCAN ─────────────────────────────────────────────────────────────────────
 async function runScan() {
+  const key = getApiKey();
+  if (!key) {
+    log("error", "No API key — enter your Anthropic key above and click SAVE & SCAN");
+    renderNoKeyState();
+    return;
+  }
   if (scanning) return;
+
+  if (!isMarketHours()) {
+    log("clear", "Market closed — scanning resumes at 9:00 AM ET Mon-Fri");
+    countdown = 15 * 60;
+    if (alerts.length === 0) renderClosedState();
+    return;
+  }
+
   setScanning(true);
   countdown = SCAN_INTERVAL_MS / 1000;
-  log("info", "Initiating scan — fetching movers + confirming catalysts...");
+  log("info", "Scanning — Benzinga, SeekingAlpha, MarketWatch, Motley Fool, SEC...");
 
   try {
-    const res = await fetch(BACKEND_URL, {
+    const res = await fetch(ANTHROPIC_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: "{}",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "web-search-2025-03-05",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 4000,
+        tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }],
+        messages: [{ role: "user", content: SCAN_PROMPT }],
+      }),
     });
 
-    log("info", `HTTP ${res.status}`);
     if (!res.ok) {
       const t = await res.text();
-      throw new Error(`HTTP ${res.status}: ${t.slice(0, 100)}`);
+      throw new Error("HTTP " + res.status + ": " + t.slice(0, 150));
     }
 
     const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    if (data.error) throw new Error(data.error.type + ": " + data.error.message);
 
-    if (data.marketClosed) {
-      log("clear", `⏸ ${data.message || "Market closed"}`);
-      countdown = 15 * 60; // slow poll when closed
-      renderClosedState();
-      return;
-    }
+    const text = (data.content || [])
+      .filter(function(b) { return b.type === "text"; })
+      .map(function(b) { return b.text; })
+      .join("\n");
 
-    // Log tier info
-    const tierLabel = ["", "Free (Yahoo+Claude)", "Polygon.io", "Institutional"][data.tier || 1];
-    log("info", `Tier: ${tierLabel} · ${data.moversFound || 0} movers found · ${data.storiesAnalyzed || 0} analyzed`);
+    let parsed = { alerts: [], storiesAnalyzed: 0 };
+    try {
+      const m = text.replace(/```[\w]*\n?/g, "").match(/\{[\s\S]*\}/);
+      if (m) parsed = JSON.parse(m[0]);
+    } catch (_) {}
 
-    handleFreshAlerts(data.alerts || []);
-    updateStatusBar(data);
+    const validated = (parsed.alerts || []).filter(function(a) {
+      if (!a || !a.ticker || !a.headline) return false;
+      if (!a.source || !String(a.source).startsWith("http")) return false;
+      const src = String(a.source).toLowerCase();
+      if (src.includes("example.com") || src.includes("url-here") || src.includes("placeholder")) return false;
+      if (isNaN(Number(a.estimatedUpside)) || Number(a.estimatedUpside) < 5) return false;
+      if (!["Critical","High","Medium"].includes(a.urgency)) return false;
+      return true;
+    });
+
+    validated.sort(function(a, b) {
+      const ord = { Critical: 0, High: 1, Medium: 2 };
+      const d = (ord[a.urgency] || 2) - (ord[b.urgency] || 2);
+      return d !== 0 ? d : (b.confidence || 0) - (a.confidence || 0);
+    });
+
+    log("info", (parsed.storiesAnalyzed || 0) + " stories analyzed · " + validated.length + " signals confirmed");
+    handleFreshAlerts(validated);
+    updateStatusBar({ alerts: validated, storiesAnalyzed: parsed.storiesAnalyzed || 0 });
+
   } catch (err) {
-    log("error", `Scan failed: ${err.message || String(err)}`);
+    log("error", "Scan failed: " + (err.message || String(err)));
   } finally {
     setScanning(false);
   }
 }
+
+function renderNoKeyState() {
+  if (alerts.length > 0) return;
+  const feed = document.getElementById("feed");
+  if (feed) feed.innerHTML = '<div class="empty-state"><div class="empty-icon">🔑</div><div class="empty-title">API KEY REQUIRED</div><div class="empty-sub">Enter your Anthropic API key above and click SAVE &amp; SCAN</div></div>';
+}
+
 
 function handleFreshAlerts(incoming) {
   const fresh = incoming.filter((a) => {
@@ -794,8 +897,19 @@ async function init() {
   document.getElementById("f-high")?.addEventListener("click", () => setFilter("high"));
   document.getElementById("f-10p")?.addEventListener("click", () => setFilter("10plus"));
 
-  // Kick off first scan
-  runScan();
+  // API key save button
+  document.getElementById("save-key-btn")?.addEventListener("click", () => {
+    const raw = document.getElementById("api-key-input")?.value?.trim();
+    if (raw && !raw.includes("••")) saveApiKey(raw);
+    runScan();
+  });
+
+  // Show key status on load
+  updateKeyStatus();
+
+  // Kick off first scan if key exists
+  if (getApiKey()) runScan();
+  else renderNoKeyState();
 }
 
 // Expose globals needed by inline onclick handlers
