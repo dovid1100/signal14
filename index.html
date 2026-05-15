@@ -364,13 +364,33 @@ header {
   .breakdown-row { grid-template-columns: 1fr; }
   .logo-sub { display: none; }
 }
+
+/* ── API KEY BANNER ───────────────────────────────────────────────────────── */
+#key-banner { background:#0a0f1a; border-bottom:1px solid #ff2d5540; padding:9px 16px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+#key-banner input { flex:1; min-width:200px; background:#05080d; border:1px solid #1e293b; color:#e2e8f0; padding:7px 10px; font-family:inherit; font-size:11px; outline:none; border-radius:2px; letter-spacing:.04em; }
+#key-banner input:focus { border-color:#00ff88; }
+#key-banner button { background:rgba(0,255,136,.1); border:1px solid rgba(0,255,136,.4); color:#00ff88; padding:7px 16px; font-family:inherit; font-size:10px; letter-spacing:.1em; cursor:pointer; white-space:nowrap; border-radius:2px; }
+#key-banner label { color:#475569; font-size:9px; letter-spacing:.1em; white-space:nowrap; }
+.key-status { font-size:8px; letter-spacing:.08em; white-space:nowrap; padding:3px 8px; border-radius:2px; }
+.key-status.ok { color:#00ff88; background:rgba(0,255,136,.07); border:1px solid rgba(0,255,136,.2); }
+.key-status.bad { color:#ff2d55; background:rgba(255,45,85,.07); border:1px solid rgba(255,45,85,.2); }
+.key-status.none { color:#475569; background:rgba(71,85,105,.07); border:1px solid #1a2535; }
 </style>
 </head>
 <body>
 <div id="app">
 
   <!-- HEADER -->
-  <header>
+  
+<!-- API KEY BANNER -->
+<div id="key-banner">
+  <label>ANTHROPIC API KEY:</label>
+  <input type="password" id="api-key-input" placeholder="sk-ant-api03-…" autocomplete="off" spellcheck="false"/>
+  <button id="save-key-btn">SAVE &amp; SCAN</button>
+  <span id="key-status" class="key-status none">NO KEY SET</span>
+</div>
+
+<header>
     <div class="hdr">
       <div class="logo">
         <div class="dot" id="dot"></div>
